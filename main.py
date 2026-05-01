@@ -156,6 +156,47 @@ def root():
     return {"status": "SnackStad backend is running", "version": "1.0.0"}
 
 
+class MatchStateInput(BaseModel):
+    scenario: str  # halftime_approaching | mid_play | var_extension
+
+
+@app.post("/match/state")
+def get_match_state(body: MatchStateInput):
+    if body.scenario == "halftime_approaching":
+        return {
+            "period": 1,
+            "clock_min": 42,
+            "clock_sec": 0,
+            "break_coming": True,
+            "break_in_seconds": 180,
+            "break_duration": 900,
+            "var_active": False,
+            "extra_time_sec": 0
+        }
+    elif body.scenario == "var_extension":
+        return {
+            "period": 1,
+            "clock_min": 44,
+            "clock_sec": 30,
+            "break_coming": True,
+            "break_in_seconds": 90,
+            "break_duration": 1080,
+            "var_active": True,
+            "extra_time_sec": 180
+        }
+    else:  # mid_play
+        return {
+            "period": 1,
+            "clock_min": 25,
+            "clock_sec": 0,
+            "break_coming": False,
+            "break_in_seconds": 1200,
+            "break_duration": 900,
+            "var_active": False,
+            "extra_time_sec": 0
+        }
+
+
 @app.post("/fan/location")
 def get_fan_location(body: SeatInput):
     seat = get_seat(body.section, body.row, body.seat_number)
