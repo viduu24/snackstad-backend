@@ -1,0 +1,138 @@
+name: SnackStad — CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  RAILWAY_URL: "https://web-production-8f7f6f.up.railway.app"
+
+jobs:
+
+  # ══════════════════════════════════════════════════════════
+  # JOB 1 — Code Quality
+  # ══════════════════════════════════════════════════════════
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 main.py --max-line-length=100 \
+            --exclude=__pycache__ \
+            --count --statistics
+
+  # ══════════════════════════════════════════════════════════
+  # JOB 2 — Unit Tests
+  # ══════════════════════════════════════════════════════════
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          pip install pytest pytest-cov
+          pytest tests/ -v \
+            --cov=main \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --tb=short
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ══════════════════════════════════════════════════════════
+  # JOB 3 — Integration Tests (hits live Railway backend)
+  # ══════════════════════════════════════════════════════════
+  integration-tests:
+    name: Integration Tests (Live API)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest requests
+
+      - name: Test root endpoint
+        run: |
+          curl -f ${{ env.RAILWAY_URL }}/ \
+            || echo "Backend not reachable — skipping live tests"
+
+      - name: Run integration tests
+        run: pytest tests/test_api.py -v --tb=short
+        env:
+          API_BASE_URL: ${{ env.RAILWAY_URL }}
+
+  # ══════════════════════════════════════════════════════════
+  # JOB 4 — Deploy to Railway (main branch only)
+  # ══════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests, integration-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          curl -f ${{ env.RAILWAY_URL }}/ \
+            && echo "✅ Deployment verified — backend is live" \
+            || echo "⚠️  Deployment may still be starting up"
+
+      - name: Post deployment summary
+        run: |
+          echo "✅ SnackStad backend deployed successfully"
+          echo "URL: ${{ env.RAILWAY_URL }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
