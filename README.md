@@ -13,14 +13,7 @@ FastAPI backend for the SnackStad AI concession agent system.
 | POST | /route/calculate | Route Agent |
 | POST | /edge/handle | Edge Case Handler |
 
-## Deploy to Railway (5 minutes)
 
-1. Go to https://railway.app and sign in with GitHub
-2. Click "New Project" → "Deploy from GitHub repo"
-3. Select this repo
-4. Railway auto-detects the Procfile and deploys
-5. Click your deployment → "Settings" → copy the public URL
-6. Replace `https://placeholder.aiamzing.com` with your URL in all Orchestrate tool JSONs
 
 ## Run locally
 
